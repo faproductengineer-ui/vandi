@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Service Tracker</title>
+<title>Vandi</title>
 <style>
 :root{--bg:#eef1f4;--ink:#1b2430;--mut:#5d6b7a;--pri:#0f4c5c;--acc:#f2b705;--card:#fff;--line:#d5dce3;--bad:#b3261e}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
@@ -19,11 +19,11 @@ button.p{background:var(--acc);color:#1b2430}button.s{background:#e3e8ed;color:v
 dialog{border:0;border-radius:12px;padding:16px;width:min(92vw,420px)}dialog::backdrop{background:#0008}
 label{display:block;font-size:14px;color:var(--mut);margin-top:10px}input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff}
 .big{font-size:26px;font-weight:700}.thumb{width:44px;height:44px;border-radius:6px;object-fit:cover}
-#lock{position:fixed;inset:0;background:var(--pri);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20;text-align:center;padding:20px}
+#lock .brand{font-size:60px;font-weight:800;letter-spacing:1px;margin-top:28px;line-height:1}#lock .mid{display:flex;flex-direction:column;align-items:center;gap:14px;margin:auto 0}#lock .by{font-size:13px;opacity:.7;margin-bottom:10px}#lock input{margin-top:4px;text-align:left}#lock form{width:min(88vw,340px);display:flex;flex-direction:column;gap:10px}#lock a{color:#fff;text-decoration:underline;font-size:14px}#lock button{min-width:220px}#lock .g{background:#fff;color:#1b2430}#lock{overflow:auto;position:fixed;inset:0;background:var(--pri);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:14px;z-index:20;text-align:center;padding:20px}
 :focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 </style></head><body>
-<div id="lock"><div style="font-size:54px">🔐</div><h2 style="margin:0">Service Tracker</h2><div id="lockmsg">Unlock with fingerprint or face</div><button class="p" id="unlock">Unlock</button></div>
-<header><button id="back" hidden>‹ Back</button><h1 id="title">My vehicles</h1><button id="sync">Sync</button></header>
+<div id="lock"></div>
+<header><button id="back" hidden>‹ Back</button><h1 id="title">My vehicles</h1><button id="lockbtn">Lock</button><button id="sync">Sync</button></header>
 <main id="app"></main><dialog id="dlg"></dialog>
 <script src="data.js"></script>
 <script>
@@ -36,14 +36,37 @@ const idb=async(m,k,v)=>{const d=await dbp;return new Promise(r=>{const o=d.tran
 const save=()=>{S.updated=Date.now();return idb('put','data',S)};
 const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN');
 const uid=()=>Math.random().toString(36).slice(2,10);
-/* biometric lock */
-async function unlock(){
- if(!native||!P.NativeBiometric){$('#lock').hidden=true;return}
- try{const a=await P.NativeBiometric.isAvailable();
-  if(!a.isAvailable){$('#lockmsg').textContent='Set up a fingerprint, face or screen lock on this phone first.';$('#lock').hidden=true;return}
-  await P.NativeBiometric.verifyIdentity({reason:'Open your vehicle records',title:'Unlock Service Tracker',useFallback:true});
-  $('#lock').hidden=true}catch(e){$('#lockmsg').textContent='Not unlocked. Try again.'}}
-$('#unlock').onclick=unlock;
+/* account + biometric */
+const enc=new TextEncoder(),hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+async function hash(pw,salt){const k=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveBits']);return hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:100000,hash:'SHA-256'},k,256))}
+const getA=()=>JSON.parse(localStorage.getItem('acct')||'null'),setA=a=>localStorage.setItem('acct',JSON.stringify(a));
+function brandIt(){const L=$('#lock'),m=document.createElement('div');m.className='mid';while(L.firstChild)m.append(L.firstChild);const b=document.createElement('div');b.className='brand';b.textContent='Vandi';const y=document.createElement('div');y.className='by';y.textContent='by Abhilash';L.append(b,m,y)}
+const done=()=>{$('#lock').hidden=true;cur=null;render()};
+async function bioVerify(){const B=P.NativeBiometric;if(!native||!B)return 'Fingerprint and face unlock only work in the installed app.';
+ try{const r=await B.isAvailable();if(!r.isAvailable)return 'No fingerprint or face is set up on this phone. Add one in phone Settings > Security, then try again.';
+  await B.verifyIdentity({reason:'Confirm it is you',title:'Vandi',negativeButtonText:'Cancel',useFallback:false,maxAttempts:3});return true}
+ catch(e){return 'Could not verify: '+(e&&(e.message||e.code)||JSON.stringify(e))}}
+async function bioUnlock(){const r=await bioVerify();r===true?done():authScreen(r)}
+function offerBio(){return new Promise(res=>{$('#lock').innerHTML=`<div style="font-size:54px">👆</div><h2 style="margin:0">Turn on fingerprint / face unlock?</h2><div>Open the app quickly without typing your password.</div><button class="p" id="y">Enable</button><button class="s" id="n">Not now</button><div id="em" style="max-width:300px"></div>`;
+ brandIt();$('#n').onclick=()=>res();$('#y').onclick=async()=>{const r=await bioVerify();if(r===true){const a=getA();a.bio=true;setA(a);res()}else $('#em').textContent=r}})}
+async function googleAuth(){try{const g=P.GoogleAuth;if(!g)throw 0;await g.initialize?.();const u=await g.signIn(),a=getA();
+ if(a&&a.email&&a.email.toLowerCase()!==u.email.toLowerCase())return authScreen('This phone is registered to '+a.email+'. Use that Google account.');
+ if(!a){setA({name:u.name||u.givenName||'',email:u.email,google:true,bio:false});await offerBio()}else if(!a.google){a.google=true;setA(a)}
+ done()}catch(e){authScreen('Google sign-in is not set up yet (it needs your Google client ID, see README). Use email and password for now.')}}
+function authScreen(msg='',usePw=false){const a=getA(),L=$('#lock');L.hidden=false;
+ if(a&&a.bio&&!usePw){L.innerHTML=`<div style="font-size:54px">🔐</div><h2 style="margin:0">Welcome back${a.name?', '+esc(a.name.split(' ')[0]):''}</h2><div style="max-width:300px">${esc(msg||'Use your fingerprint or face to open')}</div><button class="p" id="b1">Unlock</button><button class="s" id="b2">Use password instead</button>`;
+  brandIt();$('#b1').onclick=bioUnlock;$('#b2').onclick=()=>authScreen('',true);return}
+ const up=!a;
+ L.innerHTML=`<div style="font-size:54px">🚗</div><h2 style="margin:0">${up?'Create your account':'Sign in'}</h2><div id="am" style="max-width:300px;min-height:20px">${esc(msg)}</div>
+ <form id="af">${up?'<input name="n" placeholder="Your name" autocomplete="name" required>':''}<input name="e" type="email" placeholder="Email" autocomplete="email" ${a?`value="${esc(a.email)}"`:''} required><input name="p" type="password" placeholder="Password (6+ characters)" autocomplete="${up?'new-password':'current-password'}" required>${up?'<input name="p2" type="password" placeholder="Confirm password" required>':''}<button class="p">${up?'Sign up':'Sign in'}</button></form>
+ <button class="s g" id="gg">Continue with Google</button>${up?'':'<a href="#" id="fp">Forgot password?</a>'}`;
+ brandIt();$('#gg').onclick=googleAuth;
+ if(!up)$('#fp').onclick=e=>{e.preventDefault();if(a.google)return authScreen('Tap “Continue with Google” to sign in with your linked Google account.');if(confirm('Reset deletes this account and all vehicle data on this phone. Continue?')){localStorage.removeItem('acct');S={vehicles:[],updated:0};idb('put','data',S);authScreen('Account erased. Create a new one.')}};
+ $('#af').onsubmit=async e=>{e.preventDefault();const f=e.target.elements,m=t=>$('#am').textContent=t;
+  if(f.p.value.length<6)return m('Password needs at least 6 characters.');
+  if(up){if(f.p.value!==f.p2.value)return m('Passwords do not match.');const salt=uid()+uid();setA({name:f.n.value.trim(),email:f.e.value.trim(),salt,hash:await hash(f.p.value,salt),bio:false});await offerBio();done()}
+  else{if(f.e.value.trim().toLowerCase()!==a.email.toLowerCase()||!a.hash||await hash(f.p.value,a.salt)!==a.hash)return m('Wrong email or password.');done()}}}
+$('#lockbtn').onclick=()=>authScreen();
 /* helpers */
 function readImg(file,max=1280){return new Promise(res=>{if(!file)return res('');const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.72))};i.src=r.result};r.readAsDataURL(file)})}
 function form(title,fields,ok,del){
@@ -61,8 +84,8 @@ function imgBox(v){return `<div class="img">${art(v)}${(v.acc||[]).map(n=>{const
 /* screens */
 function render(){
  $('#back').hidden=!cur;$('#title').textContent=cur?cur.name:'My vehicles';
- if(!cur){$('#app').innerHTML=(S.vehicles.length?S.vehicles.map(v=>`<div class="card" data-v="${v.id}">${imgBox(v)}<div class="row" style="margin-top:8px"><div><b>${esc(v.name)}</b><div class="mut">${esc(v.brand)} ${esc(v.model)}${v.reg?' · '+esc(v.reg):''}</div></div><div class="mut">${inr(spent(v))}</div></div></div>`).join(''):'<div class="card">No vehicles yet. Tap “Add vehicle” to start.</div>')+'<button class="p fab" id="addv">+ Add vehicle</button>';
-  document.querySelectorAll('[data-v]').forEach(e=>e.onclick=()=>{cur=S.vehicles.find(v=>v.id===e.dataset.v);tab='svc';render()});$('#addv').onclick=addVehicle;return}
+ if(!cur){$('#app').innerHTML=(S.vehicles.length?S.vehicles.map(v=>`<div class="card" data-v="${v.id}">${imgBox(v)}<div class="row" style="margin-top:8px"><div><b>${esc(v.name)}</b><div class="mut">${esc(v.brand)} ${esc(v.model)}${v.reg?' · '+esc(v.reg):''}</div></div><div class="mut">${inr(spent(v))}</div></div></div>`).join(''):'<div class="card">No vehicles yet. Tap “Add vehicle” to start.</div>')+((getA()&&!getA().bio&&native)?'<div class="card row"><div>Fingerprint / face unlock is off</div><button class="s" id="eb">Enable</button></div>':'')+'<button class="p fab" id="addv">+ Add vehicle</button>';
+  document.querySelectorAll('[data-v]').forEach(e=>e.onclick=()=>{cur=S.vehicles.find(v=>v.id===e.dataset.v);tab='svc';render()});$('#addv').onclick=addVehicle;if($('#eb'))$('#eb').onclick=async()=>{const r=await bioVerify();if(r===true){const a=getA();a.bio=true;setA(a);render()}else alert(r)};return}
  const v=cur;let body='';
  if(tab==='svc'){const L=(v.services||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
   body=`<div class="card row"><div><div class="mut">Total service spend</div><div class="big">${inr((v.services||[]).reduce((s,x)=>s+ +x.amount,0))}</div></div><button class="p" id="add">+ Service</button></div>`+(L.map(s=>`<div class="card row" data-id="${s.id}"><div><b>${esc(s.title)}</b><div class="mut">${esc(s.date)}${s.odo?' · '+s.odo+' km':''}</div>${s.note?`<div class="mut">${esc(s.note)}</div>`:''}</div><div style="text-align:right"><b>${inr(s.amount)}</b>${s.bill?`<div><img class="thumb" src="${s.bill}" data-bill="${s.id}" alt="Bill"></div>`:''}</div></div>`).join('')||'<div class="card mut">No services logged yet.</div>')}
@@ -100,5 +123,5 @@ async function sync(){
   const x=await fetch(`https://www.googleapis.com/upload/drive/v3/files${id?'/'+id:''}?uploadType=multipart`,{method:id?'PATCH':'POST',headers:{...H,'Content-Type':'multipart/related; boundary='+bd},body});
   alert(x.ok?'Synced to your Google account.':'Sync failed ('+x.status+').')}catch(e){alert('Sync cancelled or failed.')}}
 $('#sync').onclick=sync;
-(async()=>{S=(await idb('get','data'))||S;render();unlock()})();
+(async()=>{S=(await idb('get','data'))||S;render();authScreen()})();
 </script></body></html>
