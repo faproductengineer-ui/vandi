@@ -1,6 +1,6 @@
 {
   "appId": "com.example.vehicleservicetracker",
-  "appName": "Service Tracker",
+  "appName": "Vandi",
   "webDir": "www",
   "plugins": {
     "GoogleAuth": {
