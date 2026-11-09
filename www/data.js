@@ -1,0 +1,52 @@
+// Offline catalogue: Indian market brands -> models (c=car, b=motorcycle, s=scooter)
+const BRANDS={
+"Maruti Suzuki":{t:"c",m:["Alto K10","S-Presso","Celerio","WagonR","Swift","Dzire","Baleno","Ignis","Brezza","Ertiga","Fronx","Grand Vitara","Jimny","XL6","Invicto","Eeco"]},
+"Tata":{t:"c",m:["Tiago","Tigor","Altroz","Punch","Nexon","Harrier","Safari","Curvv","Nexon EV","Punch EV"]},
+"Mahindra":{t:"c",m:["Bolero","Thar","Scorpio Classic","Scorpio-N","XUV 3XO","XUV700","XUV400","BE 6","XEV 9e"]},
+"Hyundai":{t:"c",m:["Grand i10 Nios","i20","Aura","Exter","Venue","Verna","Creta","Alcazar","Tucson","Ioniq 5"]},
+"Kia":{t:"c",m:["Sonet","Seltos","Carens","Carnival","EV6","Syros"]},
+"Toyota":{t:"c",m:["Glanza","Urban Cruiser Hyryder","Innova Crysta","Innova Hycross","Fortuner","Camry","Hilux","Rumion"]},
+"Honda Cars":{t:"c",m:["Amaze","City","Elevate"]},
+"Renault":{t:"c",m:["Kwid","Triber","Kiger"]},
+"Nissan":{t:"c",m:["Magnite"]},
+"Skoda":{t:"c",m:["Kylaq","Slavia","Kushaq","Kodiaq","Superb"]},
+"Volkswagen":{t:"c",m:["Virtus","Taigun","Tiguan"]},
+"MG":{t:"c",m:["Comet EV","Astor","Hector","ZS EV","Windsor EV","Gloster"]},
+"Citroen":{t:"c",m:["C3","Aircross","Basalt","eC3"]},
+"Jeep":{t:"c",m:["Compass","Meridian","Wrangler"]},
+"Hero":{t:"b",m:["Splendor Plus","HF Deluxe","Passion Pro","Glamour","Super Splendor","Xtreme 125R","Xtreme 160R","Xpulse 200","Karizma XMR"]},
+"Honda 2W":{t:"b",m:["Shine","SP 125","Unicorn","Hornet 2.0","CB350","CB200X","Livo"]},
+"Bajaj":{t:"b",m:["Platina","CT 110","Pulsar 125","Pulsar N160","Pulsar NS200","Pulsar 220F","Avenger","Dominar 400","Freedom 125 CNG"]},
+"TVS":{t:"b",m:["Sport","Radeon","Raider 125","Apache RTR 160","Apache RTR 200","Apache RR 310","Ronin"]},
+"Royal Enfield":{t:"b",m:["Hunter 350","Classic 350","Bullet 350","Meteor 350","Himalayan 450","Interceptor 650","Continental GT 650","Super Meteor 650"]},
+"Yamaha":{t:"b",m:["FZ-S Fi","FZ-X","MT-15","R15 V4","R3"]},
+"Suzuki 2W":{t:"b",m:["Gixxer","Gixxer SF 250","V-Strom SX"]},
+"KTM":{t:"b",m:["Duke 125","Duke 200","Duke 250","Duke 390","RC 200","RC 390","Adventure 390"]},
+"Jawa / Yezdi":{t:"b",m:["Jawa 42","Jawa 350","Yezdi Roadster","Yezdi Adventure"]},
+"Triumph":{t:"b",m:["Speed 400","Scrambler 400 X"]},
+"Honda Scooters":{t:"s",m:["Activa 6G","Activa 125","Dio","Dio 125"]},
+"TVS Scooters":{t:"s",m:["Jupiter","Jupiter 125","Ntorq 125","iQube"]},
+"Suzuki Scooters":{t:"s",m:["Access 125","Burgman Street","Avenis"]},
+"Hero Scooters":{t:"s",m:["Pleasure+","Destini 125","Xoom"]},
+"Yamaha Scooters":{t:"s",m:["Fascino 125","RayZR 125"]},
+"Ola Electric":{t:"s",m:["S1 X","S1 Air","S1 Pro"]},
+"Ather":{t:"s",m:["450S","450X","Rizta"]},
+"Bajaj Chetak":{t:"s",m:["Chetak"]},
+"Other":{t:"c",m:["Other"]}
+};
+const SERVICES=["General service","Oil change","Air filter","Brake pads / shoes","Tyre change","Battery","Chain / sprocket","Clutch","Wheel alignment","Coolant","Insurance","PUC","Repair","Wash / detailing","Other"];
+// Accessories: e=emoji overlay, x/y = position on the vehicle image (%), q = shop search term
+const ACC=[
+{n:"Seat cover",e:"🪑",x:50,y:42,q:"seat cover"},
+{n:"Alloy wheels",e:"⚙️",x:24,y:78,q:"alloy wheels"},
+{n:"Roof carrier",e:"🧳",x:50,y:14,q:"roof carrier"},
+{n:"Spoiler",e:"🏁",x:80,y:28,q:"spoiler"},
+{n:"Fog lamps",e:"💡",x:88,y:62,q:"fog lamps"},
+{n:"Mud flaps",e:"🟫",x:70,y:86,q:"mud flaps"},
+{n:"Body cover",e:"🛡️",x:50,y:30,q:"body cover"},
+{n:"Phone mount",e:"📱",x:34,y:30,q:"phone mount"},
+{n:"Crash guard",e:"🔰",x:16,y:60,q:"crash guard"},
+{n:"Saddle bags",e:"👜",x:60,y:55,q:"saddle bags"},
+{n:"Dash cam",e:"📹",x:44,y:24,q:"dash cam"},
+{n:"Floor mats",e:"🟦",x:50,y:56,q:"floor mats"}
+];

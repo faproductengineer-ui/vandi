@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Service Tracker</title>
+<style>
+:root{--bg:#eef1f4;--ink:#1b2430;--mut:#5d6b7a;--pri:#0f4c5c;--acc:#f2b705;--card:#fff;--line:#d5dce3;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{background:var(--pri);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+header h1{font-size:19px;margin:0;flex:1}header button{background:none;border:0;color:#fff;font-size:15px}
+main{padding:14px;max-width:640px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:center}.mut{color:var(--mut);font-size:14px}
+button.p,button.s{border:0;border-radius:8px;padding:11px 16px;font-size:16px;font-weight:600}
+button.p{background:var(--acc);color:#1b2430}button.s{background:#e3e8ed;color:var(--ink)}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));box-shadow:0 3px 10px #0004}
+.tabs{display:flex;gap:6px;margin:10px 0}.tabs button{flex:1;padding:9px;border:0;border-radius:8px;background:#e3e8ed;font-size:15px}.tabs .on{background:var(--pri);color:#fff}
+.img{position:relative;height:190px;border-radius:10px;overflow:hidden;background:linear-gradient(#cfd9e2,#e8edf1)}
+.img svg,.img>img{width:100%;height:100%;object-fit:cover}.ov{position:absolute;font-size:24px;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 2px #0007)}
+dialog{border:0;border-radius:12px;padding:16px;width:min(92vw,420px)}dialog::backdrop{background:#0008}
+label{display:block;font-size:14px;color:var(--mut);margin-top:10px}input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff}
+.big{font-size:26px;font-weight:700}.thumb{width:44px;height:44px;border-radius:6px;object-fit:cover}
+#lock{position:fixed;inset:0;background:var(--pri);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20;text-align:center;padding:20px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head><body>
+<div id="lock"><div style="font-size:54px">🔐</div><h2 style="margin:0">Service Tracker</h2><div id="lockmsg">Unlock with fingerprint or face</div><button class="p" id="unlock">Unlock</button></div>
+<header><button id="back" hidden>‹ Back</button><h1 id="title">My vehicles</h1><button id="sync">Sync</button></header>
+<main id="app"></main><dialog id="dlg"></dialog>
+<script src="data.js"></script>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cap=window.Capacitor,P=(cap&&cap.Plugins)||{},native=cap&&cap.isNativePlatform&&cap.isNativePlatform();
+let S={vehicles:[],updated:0},cur=null,tab='svc';
+/* storage (IndexedDB, works offline) */
+const dbp=new Promise(r=>{const q=indexedDB.open('vst',1);q.onupgradeneeded=()=>q.result.createObjectStore('k');q.onsuccess=()=>r(q.result)});
+const idb=async(m,k,v)=>{const d=await dbp;return new Promise(r=>{const o=d.transaction('k',m==='get'?'readonly':'readwrite').objectStore('k');const q=m==='get'?o.get(k):o.put(v,k);q.onsuccess=()=>r(q.result)})};
+const save=()=>{S.updated=Date.now();return idb('put','data',S)};
+const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN');
+const uid=()=>Math.random().toString(36).slice(2,10);
+/* biometric lock */
+async function unlock(){
+ if(!native||!P.NativeBiometric){$('#lock').hidden=true;return}
+ try{const a=await P.NativeBiometric.isAvailable();
+  if(!a.isAvailable){$('#lockmsg').textContent='Set up a fingerprint, face or screen lock on this phone first.';$('#lock').hidden=true;return}
+  await P.NativeBiometric.verifyIdentity({reason:'Open your vehicle records',title:'Unlock Service Tracker',useFallback:true});
+  $('#lock').hidden=true}catch(e){$('#lockmsg').textContent='Not unlocked. Try again.'}}
+$('#unlock').onclick=unlock;
+/* helpers */
+function readImg(file,max=1280){return new Promise(res=>{if(!file)return res('');const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.72))};i.src=r.result};r.readAsDataURL(file)})}
+function form(title,fields,ok,del){
+ const d=$('#dlg');d.innerHTML=`<h3 style="margin:0">${esc(title)}</h3><form id="f" method="dialog">${fields.map(f=>`<label>${esc(f.l)}${f.t==='select'?`<select name="${f.n}">${f.o.map(o=>`<option ${o===f.v?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='file'?`<input type="file" name="${f.n}" accept="image/*">`:`<input name="${f.n}" type="${f.t||'text'}" ${f.t==='number'?'step="any" inputmode="decimal"':''} value="${esc(f.v??'')}" ${f.r?'required':''}>`}</label>`).join('')}
+ <div class="row" style="margin-top:16px"><button type="button" class="s" id="x">Cancel</button>${del?'<button type="button" class="s" id="del" style="color:var(--bad)">Delete</button>':''}<button class="p">Save</button></div></form>`;
+ d.showModal();$('#x').onclick=()=>d.close();if(del)$('#del').onclick=()=>{if(confirm('Delete this entry?')){del();d.close()}};
+ $('#f').onsubmit=async e=>{e.preventDefault();const v={};for(const f of fields){const el=$('#f').elements[f.n];v[f.n]=f.t==='file'?await readImg(el.files[0]):el.value}await ok(v);d.close()}}
+/* vehicle art (offline) */
+function art(v){const c=v.color||'#0f4c5c';
+ const car=`<svg viewBox="0 0 300 150"><rect x="20" y="70" width="260" height="40" rx="12" fill="${c}"/><path d="M70 70l30-34h90l36 34z" fill="${c}"/><path d="M104 42h40v28h-62zM152 42h38l26 28h-64z" fill="#cfe6f2"/><circle cx="85" cy="112" r="20" fill="#222"/><circle cx="215" cy="112" r="20" fill="#222"/><circle cx="85" cy="112" r="8" fill="#999"/><circle cx="215" cy="112" r="8" fill="#999"/></svg>`;
+ const bike=`<svg viewBox="0 0 300 150"><circle cx="70" cy="110" r="28" fill="none" stroke="#222" stroke-width="8"/><circle cx="235" cy="110" r="28" fill="none" stroke="#222" stroke-width="8"/><path d="M70 110l55-45h60l50 45M125 65l-10-18h-25M185 65l12-28h26" stroke="${c}" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="118" y="52" width="70" height="16" rx="8" fill="#222"/></svg>`;
+ const sc=`<svg viewBox="0 0 300 150"><circle cx="75" cy="112" r="22" fill="#222"/><circle cx="235" cy="112" r="22" fill="#222"/><path d="M55 100h120l22-48M197 52h26M120 100c0-25 20-35 60-35" stroke="${c}" stroke-width="14" fill="none" stroke-linecap="round"/><rect x="95" y="62" width="75" height="14" rx="7" fill="#222"/></svg>`;
+ return v.photo?`<img src="${v.photo}" alt="">`:v.type==='b'?bike:v.type==='s'?sc:car}
+function imgBox(v){return `<div class="img">${art(v)}${(v.acc||[]).map(n=>{const a=ACC.find(x=>x.n===n);return a?`<span class="ov" style="left:${a.x}%;top:${a.y}%" title="${esc(a.n)}">${a.e}</span>`:''}).join('')}</div>`}
+/* screens */
+function render(){
+ $('#back').hidden=!cur;$('#title').textContent=cur?cur.name:'My vehicles';
+ if(!cur){$('#app').innerHTML=(S.vehicles.length?S.vehicles.map(v=>`<div class="card" data-v="${v.id}">${imgBox(v)}<div class="row" style="margin-top:8px"><div><b>${esc(v.name)}</b><div class="mut">${esc(v.brand)} ${esc(v.model)}${v.reg?' · '+esc(v.reg):''}</div></div><div class="mut">${inr(spent(v))}</div></div></div>`).join(''):'<div class="card">No vehicles yet. Tap “Add vehicle” to start.</div>')+'<button class="p fab" id="addv">+ Add vehicle</button>';
+  document.querySelectorAll('[data-v]').forEach(e=>e.onclick=()=>{cur=S.vehicles.find(v=>v.id===e.dataset.v);tab='svc';render()});$('#addv').onclick=addVehicle;return}
+ const v=cur;let body='';
+ if(tab==='svc'){const L=(v.services||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  body=`<div class="card row"><div><div class="mut">Total service spend</div><div class="big">${inr((v.services||[]).reduce((s,x)=>s+ +x.amount,0))}</div></div><button class="p" id="add">+ Service</button></div>`+(L.map(s=>`<div class="card row" data-id="${s.id}"><div><b>${esc(s.title)}</b><div class="mut">${esc(s.date)}${s.odo?' · '+s.odo+' km':''}</div>${s.note?`<div class="mut">${esc(s.note)}</div>`:''}</div><div style="text-align:right"><b>${inr(s.amount)}</b>${s.bill?`<div><img class="thumb" src="${s.bill}" data-bill="${s.id}" alt="Bill"></div>`:''}</div></div>`).join('')||'<div class="card mut">No services logged yet.</div>')}
+ if(tab==='fuel'){const L=(v.fuel||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.odo-a.odo),m=mileage(v);
+  body=`<div class="card row"><div><div class="mut">Average mileage</div><div class="big">${m?m.toFixed(1)+' km/l':'—'}</div></div><button class="p" id="add">+ Fuel</button></div>`+(L.map(f=>`<div class="card row" data-id="${f.id}"><div><b>${f.litres} L · ${inr(f.amount)}</b><div class="mut">${esc(f.date)} · ${f.odo} km${f.full==='Yes'?'':' · partial'}</div></div><div class="mut">${f.litres>0?inr(f.amount/f.litres)+'/L':''}</div></div>`).join('')||'<div class="card mut">No fuel entries yet. Mileage is worked out from full-tank fills.</div>')}
+ if(tab==='acc'){body=`<div class="card mut">Shop for an accessory, then tap “On image” to show it on your vehicle.</div>`+ACC.map(a=>`<div class="card row"><div>${a.e} <b>${a.n}</b></div><div><button class="s" data-shop="${a.q}">Shop</button> <button class="${(v.acc||[]).includes(a.n)?'p':'s'}" data-acc="${a.n}">${(v.acc||[]).includes(a.n)?'✓ On image':'On image'}</button></div></div>`).join('')}
+ $('#app').innerHTML=imgBox(v)+`<div class="tabs">${[['svc','Services'],['fuel','Fuel'],['acc','Accessories']].map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div>`+body+`<button class="s" id="editv" style="width:100%;margin:6px 0 80px">Edit vehicle</button>`;
+ document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+ if($('#add'))$('#add').onclick=tab==='svc'?()=>svcForm():()=>fuelForm();
+ document.querySelectorAll('[data-id]').forEach(e=>e.onclick=()=>tab==='svc'?svcForm(v.services.find(s=>s.id===e.dataset.id)):fuelForm(v.fuel.find(s=>s.id===e.dataset.id)));
+ document.querySelectorAll('[data-bill]').forEach(i=>i.onclick=e=>{e.stopPropagation();const d=$('#dlg');d.innerHTML=`<img src="${i.src}" style="width:100%"><button class="s" style="width:100%;margin-top:10px" onclick="dlg.close()">Close</button>`;d.showModal()});
+ document.querySelectorAll('[data-shop]').forEach(b=>b.onclick=()=>window.open('https://www.amazon.in/s?k='+encodeURIComponent(v.brand+' '+v.model+' '+b.dataset.shop),'_blank'));
+ document.querySelectorAll('[data-acc]').forEach(b=>b.onclick=async()=>{v.acc=v.acc||[];const n=b.dataset.acc;v.acc=v.acc.includes(n)?v.acc.filter(x=>x!==n):[...v.acc,n];await save();render()});
+ $('#editv').onclick=()=>addVehicle(v)}
+const spent=v=>(v.services||[]).reduce((s,x)=>s+ +x.amount,0);
+function mileage(v){const f=(v.fuel||[]).slice().sort((a,b)=>a.odo-b.odo);let km=0,l=0,last=null;for(const x of f){if(x.full==='Yes'){if(last!==null&&x.odo>last){km+=x.odo-last;l+=+x.litres+pending}last=+x.odo;pending=0}else pending+= +x.litres}return l?km/l:0}var pending=0;
+const today=()=>new Date().toISOString().slice(0,10);
+function addVehicle(ev){
+ const e=ev&&ev.id?ev:null;let b=e?e.brand:'Maruti Suzuki';
+ form(e?'Edit vehicle':'Add vehicle',[{n:'name',l:'Nickname',v:e?.name,r:1},{n:'brand',l:'Brand',t:'select',o:Object.keys(BRANDS),v:b},{n:'model',l:'Model (pick, or choose Other)',t:'select',o:BRANDS[b].m,v:e?.model},{n:'reg',l:'Registration number',v:e?.reg},{n:'year',l:'Year',t:'number',v:e?.year},{n:'color',l:'Colour',t:'color',v:e?.color||'#0f4c5c'},{n:'photo',l:'Photo (optional, replaces drawing)',t:'file'}],async v=>{
+  const x=e||{id:uid(),services:[],fuel:[],acc:[]};Object.assign(x,{name:v.name,brand:v.brand,model:v.model,reg:v.reg,year:v.year,color:v.color,type:BRANDS[v.brand].t});if(v.photo)x.photo=v.photo;if(!e)S.vehicles.push(x);await save();render()},
+  e?async()=>{S.vehicles=S.vehicles.filter(x=>x!==e);cur=null;await save();render()}:null);
+ const bs=$('#f').elements.brand,ms=$('#f').elements.model;bs.onchange=()=>{ms.innerHTML=BRANDS[bs.value].m.map(m=>`<option>${esc(m)}</option>`).join('')}}
+function svcForm(s){const v=cur,e=s||null;form(e?'Edit service':'Add service',[{n:'title',l:'Service',t:'select',o:SERVICES,v:e?.title},{n:'date',l:'Date',t:'date',v:e?.date||today(),r:1},{n:'amount',l:'Amount (₹)',t:'number',v:e?.amount,r:1},{n:'odo',l:'Odometer (km)',t:'number',v:e?.odo},{n:'note',l:'Notes',v:e?.note},{n:'bill',l:'Attach bill (photo)',t:'file'}],async f=>{const x=e||{id:uid()};Object.assign(x,{title:f.title,date:f.date,amount:f.amount,odo:f.odo,note:f.note});if(f.bill)x.bill=f.bill;if(!e)(v.services=v.services||[]).push(x);await save();render()},e?async()=>{v.services=v.services.filter(x=>x!==e);await save();render()}:null)}
+function fuelForm(s){const v=cur,e=s||null;form(e?'Edit fuel':'Add fuel',[{n:'date',l:'Date',t:'date',v:e?.date||today(),r:1},{n:'odo',l:'Odometer (km)',t:'number',v:e?.odo,r:1},{n:'litres',l:'Litres',t:'number',v:e?.litres,r:1},{n:'amount',l:'Amount paid (₹)',t:'number',v:e?.amount,r:1},{n:'full',l:'Filled to full tank?',t:'select',o:['Yes','No'],v:e?.full}],async f=>{const x=e||{id:uid()};Object.assign(x,f);if(!e)(v.fuel=v.fuel||[]).push(x);await save();render()},e?async()=>{v.fuel=v.fuel.filter(x=>x!==e);await save();render()}:null)}
+$('#back').onclick=()=>{cur=null;render()};
+/* Google sync: backs up to the app's hidden Drive folder; newest copy wins */
+async function sync(){
+ try{if(!P.GoogleAuth)return alert('Google sync works in the installed app (needs a Google client ID — see README).');
+  if(!navigator.onLine)return alert('You are offline. Data is saved on this phone and will sync when you tap Sync online.');
+  await P.GoogleAuth.initialize?.();const u=await P.GoogleAuth.signIn(),t=u.authentication.accessToken,H={Authorization:'Bearer '+t};
+  const l=await (await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27tracker.json%27&fields=files(id)',{headers:H})).json(),id=l.files?.[0]?.id;
+  if(id){const r=await (await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,{headers:H})).json();if((r.updated||0)>S.updated){S=r;await idb('put','data',S);cur=null;render();return alert('Restored newer data from Google Drive.')}}
+  const meta={name:'tracker.json',...(id?{}:{parents:['appDataFolder']})},bd='b'+uid(),body=`--${bd}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(S)}\r\n--${bd}--`;
+  const x=await fetch(`https://www.googleapis.com/upload/drive/v3/files${id?'/'+id:''}?uploadType=multipart`,{method:id?'PATCH':'POST',headers:{...H,'Content-Type':'multipart/related; boundary='+bd},body});
+  alert(x.ok?'Synced to your Google account.':'Sync failed ('+x.status+').')}catch(e){alert('Sync cancelled or failed.')}}
+$('#sync').onclick=sync;
+(async()=>{S=(await idb('get','data'))||S;render();unlock()})();
+</script></body></html>
